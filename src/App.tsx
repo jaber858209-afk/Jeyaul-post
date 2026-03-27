@@ -20,6 +20,34 @@ export default function App() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
+  const [stats, setStats] = useState<{ generations: number; schedulings: number; downloads: number } | null>(null);
+
+  const trackEvent = async (type: string, topic?: string) => {
+    try {
+      await fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, topic }),
+      });
+      fetchStats();
+    } catch (err) {
+      console.error('Analytics tracking failed:', err);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('/api/analytics/stats');
+      const data = await res.json();
+      setStats(data);
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchStats();
+  }, []);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +66,7 @@ export default function App() {
       ]);
       setResult(content);
       setImage(img);
+      trackEvent('generation', topic);
     } catch (err: any) {
       console.error('Generation failed:', err);
       setError(err.message || "An unexpected error occurred. Please try again.");
@@ -60,6 +89,7 @@ export default function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    trackEvent('download', topic);
   };
 
   const handleSchedule = () => {
@@ -68,6 +98,7 @@ export default function App() {
       return;
     }
     setIsScheduled(true);
+    trackEvent('scheduling', topic);
     setTimeout(() => setIsScheduled(false), 5000);
   };
 
@@ -314,6 +345,36 @@ export default function App() {
             <Loader2 className="animate-spin text-orange-500" size={48} />
             <p className="text-white/40 font-mono text-sm animate-pulse">Crafting your viral content...</p>
           </div>
+        )}
+
+        {/* Analytics Dashboard */}
+        {stats && (
+          <motion.section 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-24 pt-12 border-t border-white/5"
+          >
+            <div className="flex items-center gap-3 mb-8 justify-center md:justify-start">
+              <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500">
+                <Sparkles size={20} />
+              </div>
+              <h4 className="text-sm font-mono uppercase tracking-[0.2em] text-white/40">Engagement Analytics</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="text-3xl font-bold mb-1">{stats.generations}</div>
+                <div className="text-[10px] font-mono text-white/20 uppercase tracking-widest">Total Generations</div>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="text-3xl font-bold mb-1">{stats.schedulings}</div>
+                <div className="text-[10px] font-mono text-white/20 uppercase tracking-widest">Posts Scheduled</div>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="text-3xl font-bold mb-1">{stats.downloads}</div>
+                <div className="text-[10px] font-mono text-white/20 uppercase tracking-widest">Assets Downloaded</div>
+              </div>
+            </div>
+          </motion.section>
         )}
       </main>
 
