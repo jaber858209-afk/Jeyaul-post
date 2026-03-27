@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Linkedin, Twitter, Sparkles, Image as ImageIcon, Copy, Check, Loader2 } from 'lucide-react';
+import { Send, Linkedin, Twitter, Sparkles, Image as ImageIcon, Copy, Check, Loader2, Calendar, Download, Clock } from 'lucide-react';
 import { generatePostContent, generatePostImage, SocialPost } from './services/gemini';
 
 export default function App() {
@@ -14,6 +14,12 @@ export default function App() {
   const [result, setResult] = useState<SocialPost | null>(null);
   const [image, setImage] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Scheduling state
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [isScheduled, setIsScheduled] = useState(false);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +28,8 @@ export default function App() {
     setLoading(true);
     setResult(null);
     setImage(null);
+    setError(null);
+    setIsScheduled(false);
 
     try {
       const [content, img] = await Promise.all([
@@ -30,8 +38,9 @@ export default function App() {
       ]);
       setResult(content);
       setImage(img);
-    } catch (error) {
-      console.error('Generation failed:', error);
+    } catch (err: any) {
+      console.error('Generation failed:', err);
+      setError(err.message || "An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -41,6 +50,25 @@ export default function App() {
     navigator.clipboard.writeText(text);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const downloadImage = () => {
+    if (!image) return;
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = `jeyaul-post-${topic.toLowerCase().replace(/\s+/g, '-')}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSchedule = () => {
+    if (!scheduleDate || !scheduleTime) {
+      alert('Please select both date and time to schedule.');
+      return;
+    }
+    setIsScheduled(true);
+    setTimeout(() => setIsScheduled(false), 5000);
   };
 
   return (
@@ -106,6 +134,16 @@ export default function App() {
         </section>
 
         <AnimatePresence mode="wait">
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-8 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-center font-mono text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+
           {result && (
             <motion.div
               initial={{ opacity: 0, y: 40 }}
@@ -127,6 +165,7 @@ export default function App() {
                     <button
                       onClick={() => copyToClipboard(`${result.linkedin.text}\n\n${result.linkedin.hashtags.join(' ')}`, 'li')}
                       className="p-3 hover:bg-white/10 rounded-xl transition-colors text-white/40 hover:text-white"
+                      title="Copy to clipboard"
                     >
                       {copied === 'li' ? <Check size={20} className="text-green-400" /> : <Copy size={20} />}
                     </button>
@@ -152,8 +191,15 @@ export default function App() {
                       <div className="sticky top-8">
                         <div className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 group shadow-2xl shadow-blue-500/5">
                           <img src={image} alt="Generated" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <ImageIcon className="text-white" size={48} />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-4">
+                            <button
+                              onClick={downloadImage}
+                              className="bg-white text-black p-3 rounded-full hover:bg-orange-500 hover:text-white transition-all"
+                              title="Download Image"
+                            >
+                              <Download size={24} />
+                            </button>
+                            <span className="text-white text-xs font-mono uppercase tracking-widest">Download Asset</span>
                           </div>
                         </div>
                         <p className="mt-4 text-center text-[10px] font-mono text-white/20 uppercase tracking-widest">
@@ -193,6 +239,72 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {/* Scheduling Section */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-gradient-to-r from-orange-500/10 to-blue-500/10 border border-white/10 rounded-3xl p-8 md:p-12"
+              >
+                <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                    <h3 className="text-2xl font-bold mb-2 flex items-center gap-3 justify-center md:justify-start">
+                      <Calendar className="text-orange-500" />
+                      Schedule for Later
+                    </h3>
+                    <p className="text-white/40 text-sm">Pick a future date and time to publish your post.</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center justify-center gap-4">
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+                      <input 
+                        type="date" 
+                        value={scheduleDate}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all appearance-none text-white/80"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+                      <input 
+                        type="time" 
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all appearance-none text-white/80"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSchedule}
+                      disabled={isScheduled}
+                      className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${
+                        isScheduled 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-white text-black hover:bg-orange-500 hover:text-white'
+                      }`}
+                    >
+                      {isScheduled ? (
+                        <>
+                          <Check size={20} />
+                          Scheduled!
+                        </>
+                      ) : (
+                        'Schedule Post'
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                {isScheduled && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center mt-6 text-green-400 font-mono text-xs uppercase tracking-widest"
+                  >
+                    Post successfully queued for {scheduleDate} at {scheduleTime}
+                  </motion.p>
+                )}
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

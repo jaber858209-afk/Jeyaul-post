@@ -16,9 +16,19 @@ export interface SocialPost {
 export async function generatePostContent(topic: string): Promise<SocialPost> {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Generate social media posts for the topic: "${topic}". 
-    The LinkedIn post should be professional, engaging, and comprehensive (up to 3,000 characters).
-    The Twitter post must be strictly under 280 characters including hashtags.
+    contents: `Generate high-impact social media posts based on this input: "${topic}". 
+    
+    Requirements:
+    1. LinkedIn Post:
+       - Professional, engaging, and comprehensive (up to 3,000 characters).
+       - Use a "serial form" (structured, sequential breakdown with clear headings or numbered lists).
+       - Make it look visually appealing with appropriate spacing and formatting.
+    
+    2. Twitter Post:
+       - Strictly under 280 characters including hashtags.
+       - Punchy, high-energy summary.
+       - If the input has multiple points, pick the most impactful ones or summarize them into a serial-style list if space permits.
+    
     Return the response as JSON.`,
     config: {
       responseMimeType: "application/json",
@@ -51,31 +61,49 @@ export async function generatePostContent(topic: string): Promise<SocialPost> {
 }
 
 export async function generatePostImage(topic: string): Promise<string> {
-  // First, generate a highly descriptive and stylistic image prompt using the text model
-  const promptResponse = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Create a professional image generation prompt for the topic: "${topic}". 
-    The prompt should be highly descriptive and specify a distinct visual style such as 'flat design', 'minimalist 3D render', 'vibrant digital art', 'cinematic photography', or 'isometric illustration'. 
-    Include details about lighting, color palette (e.g., 'vibrant colors', 'monochromatic', 'pastel'), and composition. 
-    Return ONLY the prompt text, no other text.`,
-  });
+  try {
+    // First, generate a highly descriptive and stylistic image prompt using the text model
+    const promptResponse = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Create a professional image generation prompt for the topic: "${topic}". 
+      The prompt should be highly descriptive and specify a distinct visual style such as 'flat design', 'minimalist 3D render', 'vibrant digital art', 'cinematic photography', or 'isometric illustration'. 
+      Include details about lighting, color palette (e.g., 'vibrant colors', 'monochromatic', 'pastel'), and composition. 
+      Return ONLY the prompt text, no other text.`,
+    });
 
-  const detailedPrompt = promptResponse.text?.trim() || `A high-quality, professional social media illustration for the topic: "${topic}". Modern and clean aesthetic.`;
+    let detailedPrompt = promptResponse.text?.trim() || `A high-quality, professional social media illustration for the topic: "${topic}". Modern and clean aesthetic.`;
+    
+    // Clean up potential markdown wrapping from the text model
+    detailedPrompt = detailedPrompt.replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-image",
-    contents: {
-      parts: [
-        { text: detailedPrompt }
-      ]
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-image",
+      contents: {
+        parts: [
+          { text: detailedPrompt }
+        ]
+      }
+    });
+
+    const candidate = response.candidates?.[0];
+    if (!candidate) {
+      throw new Error("No candidates returned from image model");
     }
-  });
 
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData) {
-      return `data:image/png;base64,${part.inlineData.data}`;
+    if (candidate.finishReason === 'SAFETY') {
+      throw new Error("Image generation blocked by safety filters. Please try a different topic.");
     }
+
+    for (const part of candidate.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    
+    console.error("Image model response parts:", candidate.content?.parts);
+    throw new Error("No image data found in the response parts");
+  } catch (error) {
+    console.error("Image generation error:", error);
+    throw error;
   }
-  
-  throw new Error("No image generated");
 }
