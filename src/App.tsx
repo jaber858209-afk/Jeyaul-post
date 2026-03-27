@@ -14,7 +14,7 @@ export default function App() {
   const [result, setResult] = useState<SocialPost | null>(null);
   const [image, setImage] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{ content: string | null; image: string | null }>({ content: null, image: null });
   
   // Scheduling state
   const [scheduleDate, setScheduleDate] = useState('');
@@ -24,24 +24,34 @@ export default function App() {
 
   const trackEvent = async (type: string, topic?: string) => {
     try {
-      await fetch('/api/analytics/track', {
+      const response = await fetch('/api/analytics/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, topic }),
       });
-      fetchStats();
+      if (response.ok) {
+        fetchStats();
+      } else {
+        console.warn(`Analytics tracking returned status: ${response.status}`);
+      }
     } catch (err) {
-      console.error('Analytics tracking failed:', err);
+      // Silently fail for analytics to not disturb user flow, but log it
+      console.warn('Analytics tracking failed (likely server starting up):', err);
     }
   };
 
-  const fetchStats = async () => {
+  const fetchStats = async (retryCount = 0) => {
     try {
       const res = await fetch('/api/analytics/stats');
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setStats(data);
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
+      console.warn('Failed to fetch stats:', err);
+      // Retry once after 2 seconds if it's the initial load
+      if (retryCount < 1) {
+        setTimeout(() => fetchStats(retryCount + 1), 2000);
+      }
     }
   };
 
@@ -56,20 +66,36 @@ export default function App() {
     setLoading(true);
     setResult(null);
     setImage(null);
-    setError(null);
+    setErrors({ content: null, image: null });
     setIsScheduled(false);
 
     try {
-      const [content, img] = await Promise.all([
+      const [contentResult, imgResult] = await Promise.allSettled([
         generatePostContent(topic),
         generatePostImage(topic)
       ]);
-      setResult(content);
-      setImage(img);
-      trackEvent('generation', topic);
+
+      let contentError = null;
+      let imageError = null;
+
+      if (contentResult.status === 'fulfilled') {
+        setResult(contentResult.value);
+        trackEvent('generation', topic);
+      } else {
+        contentError = contentResult.reason.message || "Failed to generate post content. Please try a different topic.";
+      }
+
+      if (imgResult.status === 'fulfilled') {
+        setImage(imgResult.value);
+      } else {
+        console.warn('Image generation failed:', imgResult.reason);
+        imageError = imgResult.reason.message || "AI visual generation failed, but your post text is ready.";
+      }
+
+      setErrors({ content: contentError, image: imageError });
     } catch (err: any) {
       console.error('Generation failed:', err);
-      setError(err.message || "An unexpected error occurred. Please try again.");
+      setErrors(prev => ({ ...prev, content: "An unexpected error occurred. Please try again." }));
     } finally {
       setLoading(false);
     }
@@ -94,9 +120,17 @@ export default function App() {
 
   const handleSchedule = () => {
     if (!scheduleDate || !scheduleTime) {
-      alert('Please select both date and time to schedule.');
+      setErrors(prev => ({ ...prev, content: 'Please select both date and time to schedule.' }));
       return;
     }
+    
+    const selectedDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+    if (selectedDateTime < new Date()) {
+      setErrors(prev => ({ ...prev, content: 'Please select a future date and time.' }));
+      return;
+    }
+
+    setErrors({ content: null, image: null });
     setIsScheduled(true);
     trackEvent('scheduling', topic);
     setTimeout(() => setIsScheduled(false), 5000);
@@ -165,13 +199,13 @@ export default function App() {
         </section>
 
         <AnimatePresence mode="wait">
-          {error && (
+          {errors.content && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="mb-8 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-center font-mono text-sm"
             >
-              {error}
+              {errors.content}
             </motion.div>
           )}
 
@@ -218,7 +252,7 @@ export default function App() {
                   </div>
                   
                   <div className="lg:col-span-2">
-                    {image && (
+                    {image ? (
                       <div className="sticky top-8">
                         <div className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 group shadow-2xl shadow-blue-500/5">
                           <img src={image} alt="Generated" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -237,7 +271,16 @@ export default function App() {
                           AI Generated Visual for LinkedIn
                         </p>
                       </div>
-                    )}
+                    ) : errors.image ? (
+                      <div className="sticky top-8 p-6 rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center text-center gap-4 aspect-square">
+                        <div className="p-3 bg-red-500/10 rounded-full text-red-400">
+                          <ImageIcon size={32} />
+                        </div>
+                        <p className="text-xs font-mono text-white/40 uppercase tracking-widest leading-relaxed">
+                          {errors.image}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>

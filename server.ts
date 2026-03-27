@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,6 +11,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(cors());
   app.use(express.json());
 
   // In-memory analytics (for demo purposes)
@@ -22,24 +24,33 @@ async function startServer() {
 
   // API routes
   app.post("/api/analytics/track", (req, res) => {
-    const { type, topic } = req.body;
-    const timestamp = new Date().toISOString();
+    try {
+      const { type, topic } = req.body;
+      const timestamp = new Date().toISOString();
 
-    if (type === "generation") analytics.generations++;
-    if (type === "scheduling") analytics.schedulings++;
-    if (type === "download") analytics.downloads++;
+      if (type === "generation") analytics.generations++;
+      if (type === "scheduling") analytics.schedulings++;
+      if (type === "download") analytics.downloads++;
 
-    analytics.events.push({ type, timestamp, topic });
-    
-    // Keep only last 100 events
-    if (analytics.events.length > 100) analytics.events.shift();
+      analytics.events.push({ type, timestamp, topic });
+      
+      // Keep only last 100 events
+      if (analytics.events.length > 100) analytics.events.shift();
 
-    console.log(`[Analytics] ${type} tracked at ${timestamp}`);
-    res.json({ success: true });
+      console.log(`[Analytics] ${type} tracked at ${timestamp}`);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Analytics] Error tracking event:', err);
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   app.get("/api/analytics/stats", (req, res) => {
     res.json(analytics);
+  });
+
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   // Vite middleware for development

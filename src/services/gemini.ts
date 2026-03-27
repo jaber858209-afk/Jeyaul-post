@@ -21,13 +21,19 @@ export async function generatePostContent(topic: string): Promise<SocialPost> {
     Requirements:
     1. LinkedIn Post:
        - Professional, engaging, and comprehensive (up to 3,000 characters).
-       - Use a "serial form" (structured, sequential breakdown with clear headings or numbered lists).
+       - Use a "serial form" (structured, sequential breakdown with clear headings, emojis, and bullet points).
+       - Structure:
+         * **Bold Catchy Title** (using emojis like 🚀, 💼, ✍️)
+         * Engaging Hook
+         * Bulleted breakdown of key points (using ✔️ or similar)
+         * Summary/Insight
+         * Call to action (using 👉)
        - Make it look visually appealing with appropriate spacing and formatting.
     
     2. Twitter Post:
        - Strictly under 280 characters including hashtags.
        - Punchy, high-energy summary.
-       - If the input has multiple points, pick the most impactful ones or summarize them into a serial-style list if space permits.
+       - Use emojis and a clear structure even in short form.
     
     Return the response as JSON.`,
     config: {
@@ -66,8 +72,15 @@ export async function generatePostImage(topic: string): Promise<string> {
     const promptResponse = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Create a professional image generation prompt for the topic: "${topic}". 
-      The prompt should be highly descriptive and specify a distinct visual style such as 'flat design', 'minimalist 3D render', 'vibrant digital art', 'cinematic photography', or 'isometric illustration'. 
-      Include details about lighting, color palette (e.g., 'vibrant colors', 'monochromatic', 'pastel'), and composition. 
+      
+      Style Requirements:
+      - Visual Style: Professional social media infographic or carousel slide.
+      - Background: Dark, sleek background (e.g., charcoal, deep navy, or black).
+      - Accents: Vibrant neon accents (e.g., neon green, cyan, or orange) that match the topic's vibe.
+      - Elements: Minimalist icons representing key concepts (e.g., chat bubbles, gears, cloud, code brackets).
+      - Typography: Clean, bold headings with high-quality typography.
+      - Composition: Balanced and modern, optimized for LinkedIn/Twitter feeds.
+      
       Return ONLY the prompt text, no other text.`,
     });
 
